@@ -1,5 +1,5 @@
 # myturn-auto-renew
-
+```
 this script will renew all myturn.com checked out items to the max  
 
 it requires that you have curl and jq installed on your machine  
@@ -12,3 +12,4 @@ options:
 -c    read out the loan items  
 -d    delete all files created by this script  
 -h    print help
+```
