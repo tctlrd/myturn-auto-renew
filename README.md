@@ -1,4 +1,8 @@
 # myturn-auto-renew
+
+I wrote this script because my local tool library uses the [myturn.com](https://myturn.com) web app to manage its services.  
+Renewing items on the web app is a very slow and cumbersom process due to its poor design.  
+
 ```
 this script will renew all myturn.com checked out items to the max  
 
