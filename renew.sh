@@ -14,9 +14,9 @@
 # -h    print help
 
 # login information
-domain="yourSUBDOMAIN.myturn.com"
-username="yourUSERNAME"
-password="yourPASSWORD"
+#domain="yourSUBDOMAIN.myturn.com"
+#username="yourUSERNAME"
+#password="yourPASSWORD"
 
 # output file naming
 pull=raw-current-loans.json
