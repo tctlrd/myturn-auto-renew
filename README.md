@@ -8,6 +8,8 @@ this script will renew all myturn.com checked out items to the max
 
 it requires that you have curl and jq installed on your machine  
 set the login information variables and let her rip  
+the script will auto renew all items as many times as possible to their maximum renew date  
+there are also options if you want to access your loan list data without renewing  
 
 syntax: ./renew.sh [-l|p|c|d|i]  
 options:  
