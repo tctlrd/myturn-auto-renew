@@ -8,103 +8,113 @@
 
 # syntax: ./renew.sh [-l|p|c|d|i]
 # options:
-# -l    login
+# -f    fetch cookie
 # -p    pull the latest loan list
 # -c    read out the loan items
 # -d    delete the files & settings created by this script
 # -h    print help
 
-# login information
-DOMAIN="" # xyz.myturn.com
+# global variables
+
+## login information to fetch cookie
 USERNAME="" # your username
 PASSWORD="" # your password
 
-# output file naming
-PULL=raw-current-loans.json
-CURRENT=current-loans.json
+## file naming
+PULL="raw-current-loans.json"
+CURRENT="current-loans.json"
+COOKIE="cookie"
+ENV="env-renew"
+
+## URLs
+BASE=""
+URL="https://login.myturn.com/library/"
 
 # if the username and password variables are set in this file, remove them from the env file if it exists
-[ -n "$USERNAME" ] && [ -f env-renew.sh ] && sed -i '/USERNAME/d' env-renew.sh
-[ -n "$PASSWORD" ] && [ -f env-renew.sh ] && sed -i '/WORD/d' env-renew.sh
- 
-# if the domain variable is set in this file remove it from the env file
-[ -n "${DOMAIN}" ] && [ -f env-renew.sh ] && sed -i '/DOMAIN/d' env-renew.sh
+[ -n "$USERNAME" ] && [ -f $ENV ] && sed -i '/USERNAME/d' $ENV
+[ -n "$PASSWORD" ] && [ -f $ENV ] && sed -i '/WORD/d' $ENV
+
 
 # if the env file exists source it for saved variables
-[ -f env-renew.sh ] && source env-renew.sh
+[ -f $ENV ] && source $ENV
 
-# if the domain variable has been set or saved in the env, set it to the base url otherwise only decalare the empty base variable
-if [ -n "${DOMAIN}" ]; then
-  BASE="https://${DOMAIN}/library/"
-else BASE=""; fi
-
-# function to ask the user to set the domain variable and optionally remember it
-setDomain(){
-  if [ -z "$DOMAIN" ]; then
-    echo "kindly enter the domain of your myTurn site"
-    echo "(ie. xyz.myturn.com)"
-    read -p "domain: " DOMAIN
-    BASE="https://${DOMAIN}/library/"
-    read -p "Do you want to save this domain? (y/n): " MEM_D
-    [ $MEM_D == "y" ] && echo "export DOMAIN=\"$DOMAIN\"" >> env-renew.sh
+# function to test if valid cookie file exists for pull; else fetch cookie
+function Cookie() {
+  if [ -f $COOKIE ] && [ -n "$BASE" ] && find $COOKIE -mmin -10 | grep -q .; then
+    echo "recent cookie found and being tested"
+    CCODE=$( curl ${BASE}myAccount/editMembership  -b $COOKIE -s -w "%{http_code}" -o /dev/null)
+    [ "$CCODE" -ne "200" ] && echo "cookie was tested and found to be useless; we will attempt to replace her" && fetchCookie
+  else
+    fetchCookie
   fi
-  DOMAIN_T=$(printf "%s" "$DOMAIN" | openssl dgst -sha256 | cut -d ' ' -f 2)
-  [ -n "$PASSWORD" ] && PASSWORD=$(echo -n "$PASSWORD" | openssl enc -aes-256-cbc -salt -pass pass:"$DOMAIN_T" -pbkdf2 -base64)
 }
 
-# function to login to the server and save the session in a cookie file
-Login() {
-  setDomain
+# function to fetch a cookie from the server
+function fetchCookie() {
   if [ -z "$USERNAME" ]; then
     read -p "username: " USERNAME
     MEM_U=true
-    [ -f env-renew.sh ] && sed -i -e '/USERNAME/d' -e '/PASSWORD/d' env-renew.sh
+    [ -f $ENV ] && sed -i -e '/USERNAME/d' -e '/PASSWORD/d' $ENV
   fi
+  ZAP=$(echo -n "$USERNAME" | openssl dgst -sha256 | cut -d ' ' -f 2)
+  [ -n "$PASSWORD" ] && PASSWORD=$(echo -n "$PASSWORD"  | openssl enc -aes-256-cbc -salt -pass pass:"$ZAP" -pbkdf2 -base64)
   [ -n "$WORD" ] && PASSWORD="$WORD"
   if [ -z "$PASSWORD" ]; then
-  read -s -p "password: " PASSWORD
-  PASSWORD=$(echo -n "$PASSWORD" | openssl enc -aes-256-cbc -salt -pass pass:"$DOMAIN_T" -pbkdf2 -base64)
-  echo
-  read -p "Do you want to save these credentials? (y/n): " MEM_L
+    read -s -p "password: " PASSWORD && echo
+    PASSWORD=$(echo -n "$PASSWORD" | openssl enc -aes-256-cbc -salt -pass pass:"$ZAP" -pbkdf2 -base64)
+    read -p "Do you want to save these credentials? (y/n): " MEM_L
   fi
-  echo "attempting to log into $DOMAIN as user \"${USERNAME}\""
-  [ -f cookie ] && mv cookie cookie_bkp
-  SESH=$(curl ${BASE}j_spring_security_check -d "j_username=${USERNAME}&j_password=$(echo "$PASSWORD" | openssl enc -d -aes-256-cbc -salt -pass pass:"$DOMAIN_T" -pbkdf2 -base64)" -c cookie -s -w "%header{location}")
+  echo "attempting to fetch cookie from myturn.com as user \"${USERNAME}\""
+  find $COOKIE -mmin -10 | grep -q . && mv $COOKIE ${COOKIE}_bkp
+  SESH=$(curl ${URL}j_spring_security_check -d "j_username=${USERNAME}&j_password=$(echo "$PASSWORD" | openssl enc -d -aes-256-cbc -salt -pass pass:"$ZAP" -pbkdf2 -base64)" -c $COOKIE -s -w "%header{location}")
   if [[ "$SESH" == *"authfail"* ]]; then
-    [ -f env-renew.sh ] && sed -i -e '/USERNAME/d' -e '/PASSWORD/d' env-renew.sh
-    echo "login has failed; check your username and password"
-    [ -f cookie_bkp ] && mv cookie_bkp cookie
+    [ -f $ENV ] && source $ENV
+    [ -f $ENV ] && rm -v $ENV
+    echo "cookie fetch has failed; check your username and password"
+    [ -f ${COOKIE}_bkp ] && mv ${COOKIE}_bkp $COOKIE
+    [ -n "$BASE" ] && echo "export BASE=\""$BASE"\"" >> $ENV
     exit 1
   elif [[ "$SESH" == *"library"* ]]; then
-    echo "login success!"
+    echo "cookie fetch success!"
     if [[ $MEM_L == "y" ]]; then
-      [ -f env-renew.sh ] && sed -i -e '/USERNAME/d' -e '/PASSWORD/d' env-renew.sh
-      [[ $MEM_U == true ]] && echo "export USERNAME=\"$USERNAME\"" >> env-renew.sh
-      echo "export WORD=\""$PASSWORD"\"" >> env-renew.sh
+      [ -f $ENV ] && sed -i -e '/USERNAME/d' -e '/PASSWORD/d' $ENV
+      [[ $MEM_U == true ]] && echo "export USERNAME=\"$USERNAME\"" >> $ENV
+      echo "export WORD=\""$PASSWORD"\"" >> $ENV
     fi
-    [ -f cookie_bkp ] && rm -f cookie_bkp
-    [ -f env-renew.sh ] && source env-renew.sh
+    [ -f ${COOKIE}_bkp ] && rm -f ${COOKIE}_bkp
+    [ -f $ENV ] && source $ENV
+    [ -n "$BASE" ] && sed -i '/BASE/d' $ENV
+    BASE=$(curl ${URL}login/redirectToOrg -b $COOKIE -s -w "%header{location}")
+    echo "export BASE=\""$BASE"\"" >> $ENV
+    sed -i "s/_login/_$(echo "$BASE" | sed -E 's|.*//([^\.]+)\.my.*|\1|')/g" cookie
     [ -z "$MEMBERSHIP_ID" ] && getId
     return 0
-  else echo "unknown login error; check url"; exit 1
+  else
+    [ -f $ENV ] && rm -v $ENV
+    echo "unknown login error at location \""$SESH"\"; check domain"
+    exit 1
   fi
 }
 
 # function to retrieve the membership type id from the server and save it to the env for renewal requests
-getId() {
-  [ -f env-renew.sh ] && sed -i '/MEMBERSHIP_ID/d' env-renew.sh
-  MEMBERSHIP_ID=$(curl -s ${BASE}myAccount/editMembership -b cookie | grep -oP 'checkAgreementSignatures\(\K\d+')
-  echo "export MEMBERSHIP_ID=\"$MEMBERSHIP_ID\"">> env-renew.sh
+function getId() {
+  [ -f $ENV ] && sed -i '/MEMBERSHIP_ID/d' $ENV
+  MEMBERSHIP_ID=$(curl -s ${BASE}myAccount/editMembership -b $COOKIE | grep -oP 'checkAgreementSignatures\(\K\d+')
+  echo "export MEMBERSHIP_ID=\"$MEMBERSHIP_ID\"">> $ENV
   echo "your membership type id has been retrieved as \"$MEMBERSHIP_ID\""
 }
 
 # function to save to download the json of the users loans and save it as a file containing only the currently checked out items
-Pull() {
-  setDomain
+function Pull() {
   LSTMP=$(mktemp)
   echo "attempting to pull the loans list from the server"
-  CODE=$(curl ${BASE}myLoans/listLoansJSON -b cookie -w "%{http_code}" -o $LSTMP)
-  [ $CODE -ne 200 ] && echo "the pull failed with http response code: \"$CODE\"; make sure you are logged in with option -l" && exit 1
+  CODE=$(curl ${BASE}myLoans/listLoansJSON -b $COOKIE -w "%{http_code}" -o $LSTMP)
+  if [ $CODE -ne 200 ]; then
+    [ -f $ENV ] && rm -v $ENV
+    echo "the pull failed with http response code: \""$CODE"\""
+    echo "make sure you are logged in with option -l"
+    exit 1
+  fi
   jq '[.data[]
     | select(.isCheckedOut == true)
     | walk(if . == null then "" else . end)]' $LSTMP > $PULL
@@ -112,7 +122,7 @@ Pull() {
 }
 
 # function to display the relevant info from the loan list file and save it as a new file
-Current() {
+function Current() {
   [ ! -f $PULL ] && echo "first pull the loan list with option -p" && exit 1
   echo "displaying relevant info from $PULL and saving it as $CURRENT"; echo
   jq '[.[]
@@ -124,7 +134,7 @@ Current() {
 }
 
 # function called by the renew function to gather the data from the loan list file and prerform the renewal requests to the server
-renewLoop() {
+function renewLoop() {
   jq -c '.[]
     | select(.renewable == true)
     | {item: (.item.displayName | gsub("\\\"";"in")), loans: .id, itemId: .item.id, dueDate_date: (.maxRenewalDate | sub("T.*";"")), max: (.maxRenewalDate | sub("T.*";""))}
@@ -132,7 +142,7 @@ renewLoop() {
   while IFS='|' read -r ITEM LOANS ITEM_ID DUE_DATE_DATE MAX; do
     d=--data-urlencode
     echo "renewing $ITEM until $MAX"
-    curl ${BASE}myLoans/renew -b cookie \
+    curl ${BASE}myLoans/renew -b $COOKIE \
       $d "loans=$LOANS" \
       $d "membershipId=$MEMBERSHIP_ID" \
       $d "itemId=$ITEM_ID" \
@@ -143,10 +153,11 @@ renewLoop() {
 
 # function to login, pull the loan list, and loop through all renewable loan items to their maximum renewal date
 # and then loop through re-pulling the loan list until all items are renewed as many times as allowed
-Renew() {
-  Login
+function Renew() {
+  Cookie
   Pull
   while $(jq 'any(.renewable == true)' $PULL); do
+    [ -z "$MEMBERSHIP_ID" ] && getId
     echo "renewable item(s) found in $PULL"
     renewLoop
     Pull
@@ -155,8 +166,8 @@ Renew() {
   echo;echo "there are zero renewable items; try again tomorrow";echo
 }
 
-Delete() {
-  DELETE=("$PULL" "$CURRENT" "cookie" "cookie_bkp" "env-renew.sh")
+function Delete() {
+  DELETE=("$PULL" "$CURRENT" "$COOKIE" "${COOKIE}_bkp" "$ENV")
   for FILE in "${DELETE[@]}"; do
     [ -f "$FILE" ] && rm -v "$FILE"
   done
@@ -164,13 +175,13 @@ Delete() {
 }
 
 # function to display basic usage of this script
-Help() {
+function Help() {
    echo
    echo "this script will renew all myturn.com checked out items to the max"
    echo
    echo "syntax: ./renew.sh [-l|p|c|d|h]"
    echo "options:"
-   echo "-l   login"
+   echo "-f   fetch cookie"
    echo "-p   pull the latest loan list"
    echo "-c   read out the loan items"
    echo "-d   delete all files created by this script"
@@ -179,9 +190,9 @@ Help() {
 }
 
 # options to control this script
-while getopts ":lpcdh" opt; do
+while getopts ":fpcdh" opt; do
   case $opt in
-  l) Login; exit;;
+  f) fetchCookie; exit;;
   p) Pull; exit;;
   c) Current; exit;;
   d) Delete; exit;;
@@ -189,5 +200,6 @@ while getopts ":lpcdh" opt; do
   \?) echo "Invalid option: -${OPTARG}."; exit 1;;
   esac
 done
+
 # if no options are called default to running the renew function
 Renew
