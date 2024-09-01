@@ -30,10 +30,16 @@ ENV="env-renew"
 BASE=""
 URL="https://login.myturn.com/library/"
 
+# check if curl and jq are install
+function cmdExists() { command -v "$1" >/dev/null 2>&1; }
+FAIL=false
+if ! cmdExists curl; then echo "curl is not installed. Please install it to proceed." && FAIL=true; fi
+if ! cmdExists jq; then echo "jq is not installed. Please install it to proceed." && FAIL=true; fi
+[[ $FAIL == true ]] && exit 1
+
 # if the username and password variables are set in this file, remove them from the env file if it exists
 [ -n "$USERNAME" ] && [ -f $ENV ] && sed -i '/USERNAME/d' $ENV
 [ -n "$PASSWORD" ] && [ -f $ENV ] && sed -i '/WORD/d' $ENV
-
 
 # if the env file exists source it for saved variables
 [ -f $ENV ] && source $ENV
@@ -178,6 +184,7 @@ function Delete() {
 function Help() {
    echo
    echo "this script will renew all myturn.com checked out items to the max"
+   echo "it requires that you have curl and jq installed on your machine"
    echo
    echo "syntax: ./renew.sh [-l|p|c|d|h]"
    echo "options:"
