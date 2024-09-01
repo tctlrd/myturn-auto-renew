@@ -7,10 +7,10 @@ Renewing items on the web app is a very slow and cumbersom process due to its po
 this script will renew all myturn.com checked out items to the max
 
 it requires that you have curl and jq installed on your machine
-set the login information variables below or the script will prompt you for them
+set the login information variables or the script will prompt you for them
 you can optionally have the script retain answers to the prompts which is slightly more secure
 
-syntax: ./renew.sh [-l|p|c|d|i]
+syntax: ./renew.sh [-f|p|c|d|i]
 options:
 -f    fetch cookie
 -p    pull the latest loan list
