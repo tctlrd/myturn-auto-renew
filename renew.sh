@@ -184,7 +184,6 @@ function Delete() {
 function Help() {
    echo
    echo "this script will renew all myturn.com checked out items to the max"
-   echo "it requires that you have curl and jq installed on your machine"
    echo
    echo "syntax: ./renew.sh [-l|p|c|d|h]"
    echo "options:"
