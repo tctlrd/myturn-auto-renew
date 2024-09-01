@@ -6,7 +6,7 @@
 # set the login information variables below or the script will prompt you for them
 # you can optionally have the script retain answers to the prompts which is slightly more secure
 
-# syntax: ./renew.sh [-l|p|c|d|i]
+# syntax: ./renew.sh [-f|p|c|d|i]
 # options:
 # -f    fetch cookie
 # -p    pull the latest loan list
@@ -186,7 +186,7 @@ function Help() {
    echo
    echo "this script will renew all myturn.com checked out items to the max"
    echo
-   echo "syntax: ./renew.sh [-l|p|c|d|h]"
+   echo "syntax: ./renew.sh [-f|p|c|d|h]"
    echo "options:"
    echo "-f   fetch cookie"
    echo "-p   pull the latest loan list"
