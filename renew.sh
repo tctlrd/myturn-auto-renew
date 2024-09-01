@@ -62,17 +62,18 @@ function fetchCookie() {
     MEM_U=true
     [ -f $ENV ] && sed -i -e '/USERNAME/d' -e '/PASSWORD/d' $ENV
   fi
-  ZAP=$(echo -n "$USERNAME" | openssl dgst -sha256 | cut -d ' ' -f 2)
-  [ -n "$PASSWORD" ] && PASSWORD=$(echo -n "$PASSWORD"  | openssl enc -aes-256-cbc -salt -pass pass:"$ZAP" -pbkdf2 -base64)
+  ZAP=$(echo -n "$USERNAME" | openssl dgst -md5 | cut -d ' ' -f 2)
+  [ -n "$PASSWORD" ] && PASSWORD=$(echo -n "$PASSWORD"  | openssl enc -aes-256-cbc -salt -pass pass:"$ZAP" -pbkdf2 -base64 -A)
   [ -n "$WORD" ] && PASSWORD="$WORD"
   if [ -z "$PASSWORD" ]; then
     read -s -p "password: " PASSWORD && echo
-    PASSWORD=$(echo -n "$PASSWORD" | openssl enc -aes-256-cbc -salt -pass pass:"$ZAP" -pbkdf2 -base64)
+    PASSWORD=$(echo -n "$PASSWORD" | openssl enc -aes-256-cbc -salt -pass pass:"$ZAP" -pbkdf2 -base64 -A)
     read -p "Do you want to save these credentials? (y/n): " MEM_L
   fi
   echo "attempting to fetch cookie from myturn.com as user \"${USERNAME}\""
-  find $COOKIE -mmin -10 | grep -q . && mv $COOKIE ${COOKIE}_bkp
-  SESH=$(curl ${URL}j_spring_security_check -d "j_username=${USERNAME}&j_password=$(echo "$PASSWORD" | openssl enc -d -aes-256-cbc -salt -pass pass:"$ZAP" -pbkdf2 -base64)" -c $COOKIE -s -w "%header{location}")
+  [ -f $COOKIE ] && find $COOKIE -mmin -10 | grep -q . && mv $COOKIE ${COOKIE}_bkp
+  PAZ=$(echo "$PASSWORD" | openssl enc -d -aes-256-cbc -salt -pass pass:"$ZAP" -pbkdf2 -base64)
+  SESH=$(curl ${URL}j_spring_security_check -d "j_username=${USERNAME}&j_password=${PAZ}" -c $COOKIE -s -w "%header{location}")
   if [[ "$SESH" == *"authfail"* ]]; then
     [ -f $ENV ] && source $ENV
     [ -f $ENV ] && rm -v $ENV
@@ -92,7 +93,7 @@ function fetchCookie() {
     [ -n "$BASE" ] && sed -i '/BASE/d' $ENV
     BASE=$(curl ${URL}login/redirectToOrg -b $COOKIE -s -w "%header{location}")
     echo "export BASE=\""$BASE"\"" >> $ENV
-    sed -i "s/_login/_$(echo "$BASE" | sed -E 's|.*//([^\.]+)\.my.*|\1|')/g" cookie
+    sed -i 's/_login/_/; s/FALSE/TRUE/' $COOKIE
     [ -z "$MEMBERSHIP_ID" ] && getId
     return 0
   else
