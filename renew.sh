@@ -133,7 +133,7 @@ function Current() {
   [ ! -f $PULL ] && echo "first pull the loan list with option -p" && exit 1
   echo "displaying relevant info from $PULL and saving it as $CURRENT"; echo
   jq '[.[]
-      | {item: (.item.displayName | gsub("\\\"";"in")), id: .item.internalId, renewable: .renewable, remaining: .renewalsLeft, max: .maxRenewalDate, out: .checkedOutTimestamp, due: .dueDate}
+      | {item: (.item.displayName | gsub("\\\"";"in")), id: .item.internalId, renewable: .selfRenewalStatus.isRenewableNow, remaining: .selfRenewalStatus.renewalsLeft, max: .selfRenewalStatus.maxRenewDate, out: .checkedOutTimestamp, due: .dueDate}
       | (.out, .due, .max) |= sub("T.*";"")
       | with_entries(select(.value != "")) ]
       | sort_by(.renewable == true | if . then 1 else 0 end)' $PULL > $CURRENT
@@ -143,8 +143,8 @@ function Current() {
 # function called by the renew function to gather the data from the loan list file and prerform the renewal requests to the server
 function renewLoop() {
   jq -c '.[]
-    | select(.renewable == true)
-    | {item: (.item.displayName | gsub("\\\"";"in")), loans: .id, itemId: .item.id, dueDate_date: (.maxRenewalDate | sub("T.*";"")), max: (.maxRenewalDate | sub("T.*";""))}
+    | select(.selfRenewalStatus.isRenewableNow == true)
+    | {item: (.item.displayName | gsub("\\\"";"in")), loans: .id, itemId: .item.id, dueDate_date: (.selfRenewalStatus.maxRenewDate | sub("T.*";"")), max: (.selfRenewalStatus.maxRenewDate | sub("T.*";""))}
     | .dueDate_date |= (split("-") | "\(.|.[1] | tonumber)/\(.|.[2] | tonumber)/\(.|.[0])") | join("|")' $PULL | \
   while IFS='|' read -r ITEM LOANS ITEM_ID DUE_DATE_DATE MAX; do
     d=--data-urlencode
@@ -163,7 +163,7 @@ function renewLoop() {
 function Renew() {
   Cookie
   Pull
-  while $(jq 'any(.renewable == true)' $PULL); do
+  while $(jq 'any(.selfRenewalStatus.isRenewableNow == true)' $PULL); do
     [ -z "$MEMBERSHIP_ID" ] && getId
     echo "renewable item(s) found in $PULL"
     renewLoop
